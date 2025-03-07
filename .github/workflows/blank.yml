@@ -45,7 +45,7 @@ jobs:
           g = Github(os.environ['GITHUB_TOKEN'])
 
           repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
-          issue_number = os.environ['ISSUE_NUMBER']
+          issue_number = int(os.environ['ISSUE_NUMBER'])
           issue = repo.get_issue(number=issue_number)
 
           prompt = f"以下のIssueの内容に基づいてコードを修正してください:\n\nタイトル: {issue.title}\n内容: {issue.body}"
