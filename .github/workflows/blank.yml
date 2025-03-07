@@ -34,7 +34,7 @@ jobs:
       - name: Generate modified code with Gemini API
         id: gemini
         run: |
-          python <<EOF
+          python <<EOF_PY
 import os
 import google.generativeai as genai
 from github import Github
@@ -51,7 +51,7 @@ model = genai.GenerativeModel('gemini-pro')
 response = model.generate_content(prompt)
 
 print(f"MODIFIED_CODE<<EOF\n{response.text}\nEOF")
-EOF
+EOF_PY
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
