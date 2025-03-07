@@ -31,6 +31,10 @@ jobs:
           
       - name: Generate modified code with Gemini API
         id: gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ steps.issue.outputs.ISSUE_NUMBER }}  # ここで出力を環境変数にマッピング
         run: |
           python <<EOF_PY
           import os
@@ -50,9 +54,6 @@ jobs:
 
           print(f"MODIFIED_CODE<<EOF\n{response.text}\nEOF")
           EOF_PY
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Update file on GitHub
         run: |
