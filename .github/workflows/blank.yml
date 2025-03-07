@@ -35,23 +35,23 @@ jobs:
         id: gemini
         run: |
           python <<EOF_PY
-import os
-import google.generativeai as genai
-from github import Github
+          import os
+          import google.generativeai as genai
+          from github import Github
 
-genai.configure(api_key=os.environ['GEMINI_API_KEY'])
-g = Github(os.environ['GITHUB_TOKEN'])
+          genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+          g = Github(os.environ['GITHUB_TOKEN'])
 
-repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
-issue_number = os.environ['ISSUE_NUMBER']
-issue = repo.get_issue(number=issue_number)
+          repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
+          issue_number = os.environ['ISSUE_NUMBER']
+          issue = repo.get_issue(number=issue_number)
 
-prompt = f"以下のIssueの内容に基づいてコードを修正してください:\n\nタイトル: {issue.title}\n内容: {issue.body}"
-model = genai.GenerativeModel('gemini-pro')
-response = model.generate_content(prompt)
+          prompt = f"以下のIssueの内容に基づいてコードを修正してください:\n\nタイトル: {issue.title}\n内容: {issue.body}"
+          model = genai.GenerativeModel('gemini-pro')
+          response = model.generate_content(prompt)
 
-print(f"MODIFIED_CODE<<EOF\n{response.text}\nEOF")
-EOF_PY
+          print(f"MODIFIED_CODE<<EOF\n{response.text}\nEOF")
+          EOF_PY
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,20 +59,20 @@ EOF_PY
       - name: Update file on GitHub
         run: |
           python <<EOF_PY
-import os
-from github import Github
+          import os
+          from github import Github
 
-g = Github(os.environ['GITHUB_TOKEN'])
-repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
-file_path = "path/to/your/file.py"  # 修正対象ファイルのパス
-branch_name = f"fix-issue-${{ steps.issue.outputs.ISSUE_NUMBER }}"
+          g = Github(os.environ['GITHUB_TOKEN'])
+          repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
+          file_path = "path/to/your/file.py"  # 修正対象ファイルのパス
+          branch_name = f"fix-issue-${{ steps.issue.outputs.ISSUE_NUMBER }}"
 
-contents = repo.get_contents(file_path, ref=os.environ['GITHUB_REF_NAME'])
-new_content = os.environ['MODIFIED_CODE']
-commit_message = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
+          contents = repo.get_contents(file_path, ref=os.environ['GITHUB_REF_NAME'])
+          new_content = os.environ['MODIFIED_CODE']
+          commit_message = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
 
-repo.update_file(contents.path, commit_message, new_content, contents.sha, branch=branch_name)
-EOF_PY
+          repo.update_file(contents.path, commit_message, new_content, contents.sha, branch=branch_name)
+          EOF_PY
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MODIFIED_CODE: ${{ steps.gemini.outputs.MODIFIED_CODE }}
@@ -82,18 +82,18 @@ EOF_PY
       - name: Create pull request
         run: |
           python <<EOF
-import os
-from github import Github
+          import os
+          from github import Github
 
-g = Github(os.environ['GITHUB_TOKEN'])
-repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
-branch_name = f"fix-issue-${{ steps.issue.outputs.ISSUE_NUMBER }}"
-base_branch = "${{ github.event.issue.base.ref }}"
-title = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
-body = "This pull request was created by an LLM based on the issue."
+          g = Github(os.environ['GITHUB_TOKEN'])
+          repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
+          branch_name = f"fix-issue-${{ steps.issue.outputs.ISSUE_NUMBER }}"
+          base_branch = "${{ github.event.issue.base.ref }}"
+          title = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
+          body = "This pull request was created by an LLM based on the issue."
 
-repo.create_pull(title=title, body=body, head=branch_name, base=base_branch)
-EOF
+          repo.create_pull(title=title, body=body, head=branch_name, base=base_branch)
+          EOF
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
