@@ -1,60 +1,99 @@
-name: Generate code via LLM
+name: LLM Code Fix
 
 on:
-  workflow_dispatch:  # 手動トリガーに設定し、必要時のみ実行
-  #  push:
-  #    paths:
-  #      - 'input/**' # 自動トリガーならこちらを使用
+  issues:
+    types: [labeled]
 
 jobs:
-  generate-code:
+  fix:
+    if: github.event.label.name == 'llm-fix'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
+      - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.issue.head.ref || github.event.issue.base.ref || github.ref }}
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.9'
 
-      - name: Install openai
-        run: pip install openai
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-generativeai PyGithub
 
-      - name: Call OpenAI API
+      - name: Get issue details
+        id: issue
+        run: |
+          echo "ISSUE_NUMBER=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          echo "ISSUE_TITLE=${{ github.event.issue.title }}" >> $GITHUB_OUTPUT
+          echo "ISSUE_BODY=${{ github.event.issue.body }}" >> $GITHUB_OUTPUT
+
+      - name: Generate modified code with Gemini API
+        id: gemini
+        run: |
+          python <<EOF
+import os
+import google.generativeai as genai
+from github import Github
+
+genai.configure(api_key=os.environ['GEMINI_API_KEY'])
+g = Github(os.environ['GITHUB_TOKEN'])
+
+repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
+issue_number = ${{ steps.issue.outputs.ISSUE_NUMBER }}
+issue = repo.get_issue(number=issue_number)
+
+prompt = f"以下のIssueの内容に基づいてコードを修正してください:\n\nタイトル: {issue.title}\n内容: {issue.body}"
+model = genai.GenerativeModel('gemini-pro')
+response = model.generate_content(prompt)
+
+print(f"MODIFIED_CODE<<EOF\n{response.text}\nEOF")
+EOF
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update file on GitHub
         run: |
-          import os
-          import openai
+          python <<EOF
+import os
+from github import Github
 
-          openai.api_key = os.environ["OPENAI_API_KEY"]
+g = Github(os.environ['GITHUB_TOKEN'])
+repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
+file_path = "path/to/your/file.py"  # 修正対象ファイルのパス
+branch_name = f"fix-issue-${{ steps.issue.outputs.ISSUE_NUMBER }}"
 
-          # プロンプトファイルの読み込み
-          with open("input/prompt.md", "r", encoding="utf-8") as f:
-              prompt_text = f.read()
+contents = repo.get_contents(file_path, ref=os.environ['GITHUB_REF_NAME'])
+new_content = os.environ['MODIFIED_CODE']
+commit_message = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
 
-          # ChatCompletion呼び出し
-          response = openai.ChatCompletion.create(
-              model="gpt-3.5-turbo",  # 料金が比較的安い
-              messages=[
-                  {"role": "system", "content": "You are a coding assistant."},
-                  {"role": "user",   "content": prompt_text}
-              ],
-              temperature=0.7
-          )
-          answer = response["choices"][0]["message"]["content"]
+repo.update_file(contents.path, commit_message, new_content, contents.sha, branch=branch_name)
+EOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          MODIFIED_CODE: ${{ steps.gemini.outputs.MODIFIED_CODE }}
+          GITHUB_REF_NAME: ${{ github.ref_name }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
 
-          # 出力先（例：src/generated_code.py）
-          os.makedirs("src", exist_ok=True)
-          with open("src/generated_code.py", "w", encoding="utf-8") as f:
-              f.write(answer)
-
-      - name: Commit and push generated code
+      - name: Create pull request
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add src/generated_code.py
-          git commit -m "Add generated code"
-          git push
+          python <<EOF
+import os
+from github import Github
+
+g = Github(os.environ['GITHUB_TOKEN'])
+repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
+branch_name = f"fix-issue-${{ steps.issue.outputs.ISSUE_NUMBER }}"
+base_branch = "${{ github.event.issue.base.ref }}"
+title = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
+body = "This pull request was created by an LLM based on the issue."
+
+repo.create_pull(title=title, body=body, head=branch_name, base=base_branch)
+EOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
