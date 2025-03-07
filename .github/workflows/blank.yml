@@ -43,7 +43,7 @@ genai.configure(api_key=os.environ['GEMINI_API_KEY'])
 g = Github(os.environ['GITHUB_TOKEN'])
 
 repo = g.get_repo(os.environ['GITHUB_REPOSITORY'])
-issue_number = ${{ steps.issue.outputs.ISSUE_NUMBER }}
+issue_number = os.environ['ISSUE_NUMBER']
 issue = repo.get_issue(number=issue_number)
 
 prompt = f"以下のIssueの内容に基づいてコードを修正してください:\n\nタイトル: {issue.title}\n内容: {issue.body}"
@@ -58,7 +58,7 @@ EOF
 
       - name: Update file on GitHub
         run: |
-          python <<EOF
+          python <<EOF_PY
 import os
 from github import Github
 
@@ -72,7 +72,7 @@ new_content = os.environ['MODIFIED_CODE']
 commit_message = f"Fix issue #${{ steps.issue.outputs.ISSUE_NUMBER }} with LLM"
 
 repo.update_file(contents.path, commit_message, new_content, contents.sha, branch=branch_name)
-EOF
+EOF_PY
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MODIFIED_CODE: ${{ steps.gemini.outputs.MODIFIED_CODE }}
