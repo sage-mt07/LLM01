@@ -1,0 +1,60 @@
+name: Generate code via LLM
+
+on:
+  workflow_dispatch:  # 手動トリガーに設定し、必要時のみ実行
+  #  push:
+  #    paths:
+  #      - 'input/**' # 自動トリガーならこちらを使用
+
+jobs:
+  generate-code:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install openai
+        run: pip install openai
+
+      - name: Call OpenAI API
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          import os
+          import openai
+
+          openai.api_key = os.environ["OPENAI_API_KEY"]
+
+          # プロンプトファイルの読み込み
+          with open("input/prompt.md", "r", encoding="utf-8") as f:
+              prompt_text = f.read()
+
+          # ChatCompletion呼び出し
+          response = openai.ChatCompletion.create(
+              model="gpt-3.5-turbo",  # 料金が比較的安い
+              messages=[
+                  {"role": "system", "content": "You are a coding assistant."},
+                  {"role": "user",   "content": prompt_text}
+              ],
+              temperature=0.7
+          )
+          answer = response["choices"][0]["message"]["content"]
+
+          # 出力先（例：src/generated_code.py）
+          os.makedirs("src", exist_ok=True)
+          with open("src/generated_code.py", "w", encoding="utf-8") as f:
+              f.write(answer)
+
+      - name: Commit and push generated code
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add src/generated_code.py
+          git commit -m "Add generated code"
+          git push
