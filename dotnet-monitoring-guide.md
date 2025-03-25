@@ -176,11 +176,18 @@ spec:
 
 ### 3. dotnet-monitorの使用
 
+dotnet-monitorを使用するには2つの主要なアプローチがあります。
+
+#### 3.1 サイドカーコンテナ方式（推奨）
+
+サイドカーコンテナとしてdotnet-monitorを実行する方法は、Kubernetes環境で特に適しています：
+
 **Kubernetes Deployment**:
 
 ```yaml
 spec:
   containers:
+  # dotnet-monitorのサイドカーコンテナ
   - name: dotnet-monitor
     image: mcr.microsoft.com/dotnet/monitor:8.0
     args: ["collect", "--urls", "http://+:52323"]
@@ -198,6 +205,7 @@ spec:
       - name: diagsocket
         mountPath: /diag
   
+  # メインのアプリケーションコンテナ
   - name: my-grpc-service
     image: your-registry/my-grpc-service:latest
     env:
@@ -227,6 +235,56 @@ metadata:
           "metrics": [".*"]
         }
       ]
+```
+
+**サイドカー方式の利点**:
+- アプリケーションと監視ツールの関心の分離
+- 監視ツールを個別にスケールまたは更新可能
+- アプリケーションコンテナのイメージサイズが最小限に保たれる
+- リソース制限を別々に設定可能
+
+#### 3.2 アプリケーションコンテナに組み込む方式
+
+小規模な環境や、Kubernetesを使用していない場合は、dotnet-monitorをアプリケーションコンテナに直接組み込むことも可能です。
+
+**Dockerfile例**:
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
+WORKDIR /app
+EXPOSE 80
+EXPOSE 443
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+# ビルド手順...
+
+FROM mcr.microsoft.com/dotnet/monitor:8.0 AS monitor
+
+FROM base AS final
+WORKDIR /app
+COPY --from=publish /app/publish .
+# dotnet-monitorからの必要なファイルをコピー
+COPY --from=monitor /app /app/dotnet-monitor
+
+ENV PATH="${PATH}:/app/dotnet-monitor"
+ENV DOTNETMONITOR_Metrics__Endpoints="http://+:52325/metrics"
+ENV DOTNETMONITOR_DiagnosticPort__ConnectionMode="Connect"
+ENV DOTNET_DiagnosticPorts="/diag/monitor.sock"
+
+# 監視とアプリケーションを起動するスクリプト
+COPY start.sh /app/
+RUN chmod +x /app/start.sh
+ENTRYPOINT ["/app/start.sh"]
+```
+
+start.sh:
+```bash
+#!/bin/bash
+mkdir -p /diag
+# バックグラウンドでdotnet-monitorを起動
+/app/dotnet-monitor/dotnet-monitor collect --urls http://+:52323 &
+# アプリケーションを起動
+dotnet YourApp.dll
 ```
 
 ## 監視すべき重要なgRPCメトリクス
