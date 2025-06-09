@@ -1,0 +1,20 @@
+{
+  "name": "copilot-logger-js",
+  "displayName": "Copilot Logger JS",
+  "description": "Log Copilot-like completions to a local file",
+  "version": "0.0.1",
+  "engines": { "vscode": "^1.70.0" },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onDidChangeTextDocument",
+    "onCommand:copilotLogger.openLog"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "copilotLogger.openLog",
+        "title": "Copilot Logger: Open Log"
+      }
+    ]
+  }
+}
